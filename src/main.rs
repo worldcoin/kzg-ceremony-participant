@@ -25,7 +25,7 @@ fn write_ptau_file(ptau_g1: Vec<G1Affine>, ptau_g2: Vec<G2Affine>, path: &Path) 
 }
 
 /**
- * Generate the initial ptau setup.
+ * Generate the initial ptau setup (just the generators).
  */
 fn generate_initial() -> Result<()> {
     let mut rng = thread_rng();
@@ -34,21 +34,10 @@ fn generate_initial() -> Result<()> {
     let g1 = G1::rand(&mut rng).into_affine();
     let g2 = G2::rand(&mut rng).into_affine();
 
-    // secret
-    let s = ScalarField::rand(&mut rng);
-
-    // s^i*G1
-    let ptau_g1 = cfg_into_iter!(0..u32::pow(2, DOMAIN_SIZE) + 1)
-        .map(|i| g1.mul(s.pow([i as u64])).into_affine())
-        .collect::<Vec<_>>();
-
-    // s^i*G2
-    let ptau_g2 = cfg_into_iter!(0..u32::pow(2, DOMAIN_SIZE) + 1)
-        .map(|i| g2.mul(s.pow([i as u64])).into_affine())
-        .collect::<Vec<_>>();
+    let size = (u32::pow(2, DOMAIN_SIZE) + 1) as usize;
 
     // serialize and write to file
-    write_ptau_file(ptau_g1, ptau_g2, Path::new("setup.ptau"))
+    write_ptau_file(vec![g1; size], vec![g2; size], Path::new("setup.ptau"))
 }
 
 /**
@@ -62,6 +51,7 @@ fn contribute() -> Result<()> {
     let mut ptau_g2: Vec<G2Affine> = Vec::new();
 
     let mut reader = std::fs::File::open("setup.ptau")?;
+    
     for _ in 0..u32::pow(2, DOMAIN_SIZE) + 1 {
         ptau_g1.push(G1Affine::deserialize(&mut reader)?);
     }
