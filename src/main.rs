@@ -7,8 +7,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::{cfg_into_iter, UniformRand};
 use eyre::Result;
 use rand::thread_rng;
-
-const DOMAIN_SIZE: u32 = 12; // support up to 2**12=4096 field elements
+use std::time::Instant;
 
 /**
  * Serialize ptau to a file.
@@ -27,14 +26,14 @@ fn write_ptau_file(ptau_g1: Vec<G1Affine>, ptau_g2: Vec<G2Affine>, path: &Path) 
 /**
  * Generate the initial ptau setup (just the generators).
  */
-fn generate_initial() -> Result<()> {
+fn generate_initial(domain_size: usize) -> Result<()> {
     let mut rng = thread_rng();
 
     // g1 generator
     let g1 = G1::rand(&mut rng).into_affine();
     let g2 = G2::rand(&mut rng).into_affine();
 
-    let size = (u32::pow(2, DOMAIN_SIZE) + 1) as usize;
+    let size = (u32::pow(2, domain_size as u32) + 1) as usize;
 
     // serialize and write to file
     write_ptau_file(vec![g1; size], vec![g2; size], Path::new("setup.ptau"))
@@ -43,7 +42,7 @@ fn generate_initial() -> Result<()> {
 /**
  * Apply a user's contibution to the setup
  */
-fn contribute() -> Result<()> {
+fn contribute(domain_size: usize) -> Result<()> {
     let mut rng = thread_rng();
     
     // read ptau file
@@ -52,11 +51,11 @@ fn contribute() -> Result<()> {
 
     let mut reader = std::fs::File::open("setup.ptau")?;
     
-    for _ in 0..u32::pow(2, DOMAIN_SIZE) + 1 {
+    for _ in 0..u32::pow(2, domain_size as u32) + 1 {
         ptau_g1.push(G1Affine::deserialize(&mut reader)?);
     }
 
-    for _ in 0..u32::pow(2, DOMAIN_SIZE) + 1 {
+    for _ in 0..u32::pow(2, domain_size as u32) + 1 {
         ptau_g2.push(G2Affine::deserialize(&mut reader)?);
     }
 
@@ -81,6 +80,15 @@ fn verify() {
 }
 
 fn main() {
-    generate_initial().unwrap();
-    contribute().unwrap();
+    let start = Instant::now();
+    for domain_size in [12, 13, 14, 15] {
+        println!("Generating initial ptau setup for domain size {}", domain_size);
+        let start = Instant::now();
+        generate_initial(domain_size).unwrap();
+        contribute(domain_size).unwrap();
+        let duration = start.elapsed();
+        println!("Duration: {:?}", duration);
+    }
+    let duration = start.elapsed();
+    println!("Total duration: {:?}", duration);
 }
