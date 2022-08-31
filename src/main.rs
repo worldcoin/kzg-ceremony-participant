@@ -36,7 +36,7 @@ fn generate_initial(domain_size: usize) -> Result<()> {
     let size = (u32::pow(2, domain_size as u32) + 1) as usize;
 
     // serialize and write to file
-    write_ptau_file(vec![g1; size], vec![g2; size], Path::new("setup.ptau"))
+    write_ptau_file(vec![g1; size], vec![g2; 65], Path::new("setup.ptau"))
 }
 
 /**
@@ -49,16 +49,20 @@ fn contribute(domain_size: usize) -> Result<()> {
     let mut ptau_g1: Vec<G1Affine> = Vec::new();
     let mut ptau_g2: Vec<G2Affine> = Vec::new();
 
+    let start = Instant::now();
     let mut reader = std::fs::File::open("setup.ptau")?;
     
     for _ in 0..u32::pow(2, domain_size as u32) + 1 {
         ptau_g1.push(G1Affine::deserialize(&mut reader)?);
     }
 
-    for _ in 0..u32::pow(2, domain_size as u32) + 1 {
+    for _ in 0..65 {
         ptau_g2.push(G2Affine::deserialize(&mut reader)?);
     }
+    let duration = start.elapsed();
+    println!("Read Duration: {:?}", duration);
 
+    let start = Instant::now();
     // private contribution
     let t = ScalarField::rand(&mut rng);
 
@@ -70,9 +74,15 @@ fn contribute(domain_size: usize) -> Result<()> {
     let ptau_g2_contributed = cfg_into_iter!(ptau_g2).enumerate()
         .map(|(i, sg)| sg.mul(t.pow([i as u64])).into_affine())
         .collect::<Vec<_>>();
+    let duration = start.elapsed();
+    println!("Compute Duration: {:?}", duration);
 
     // serialize and write to file
-    write_ptau_file(ptau_g1_contributed, ptau_g2_contributed, Path::new("contribution.ptau"))
+    let start = Instant::now();
+    write_ptau_file(ptau_g1_contributed, ptau_g2_contributed, Path::new("contribution.ptau"))?;
+    let duration = start.elapsed();
+    println!("Write Duration: {:?}", duration);
+    Ok(())
 }
 
 fn verify() {
