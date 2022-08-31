@@ -7,8 +7,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::{cfg_into_iter, UniformRand};
 use eyre::Result;
 use rand::thread_rng;
-
-const DOMAIN_SIZE: u32 = 12; // support up to 2**12=4096 field elements
+use std::time::Instant;
 
 /**
  * Serialize ptau to a file.
@@ -27,39 +26,43 @@ fn write_ptau_file(ptau_g1: Vec<G1Affine>, ptau_g2: Vec<G2Affine>, path: &Path) 
 /**
  * Generate the initial ptau setup (just the generators).
  */
-fn generate_initial() -> Result<()> {
+fn generate_initial(domain_size: usize) -> Result<()> {
     let mut rng = thread_rng();
 
     // g1 generator
     let g1 = G1::rand(&mut rng).into_affine();
     let g2 = G2::rand(&mut rng).into_affine();
 
-    let size = (u32::pow(2, DOMAIN_SIZE) + 1) as usize;
+    let size = (u32::pow(2, domain_size as u32) + 1) as usize;
 
     // serialize and write to file
-    write_ptau_file(vec![g1; size], vec![g2; size], Path::new("setup.ptau"))
+    write_ptau_file(vec![g1; size], vec![g2; 65], Path::new("setup.ptau"))
 }
 
 /**
  * Apply a user's contibution to the setup
  */
-fn contribute() -> Result<()> {
+fn contribute(domain_size: usize) -> Result<()> {
     let mut rng = thread_rng();
     
     // read ptau file
     let mut ptau_g1: Vec<G1Affine> = Vec::new();
     let mut ptau_g2: Vec<G2Affine> = Vec::new();
 
+    let start = Instant::now();
     let mut reader = std::fs::File::open("setup.ptau")?;
     
-    for _ in 0..u32::pow(2, DOMAIN_SIZE) + 1 {
+    for _ in 0..u32::pow(2, domain_size as u32) + 1 {
         ptau_g1.push(G1Affine::deserialize(&mut reader)?);
     }
 
-    for _ in 0..u32::pow(2, DOMAIN_SIZE) + 1 {
+    for _ in 0..65 {
         ptau_g2.push(G2Affine::deserialize(&mut reader)?);
     }
+    let duration = start.elapsed();
+    println!("Read Duration: {:?}", duration);
 
+    let start = Instant::now();
     // private contribution
     let t = ScalarField::rand(&mut rng);
 
@@ -71,9 +74,15 @@ fn contribute() -> Result<()> {
     let ptau_g2_contributed = cfg_into_iter!(ptau_g2).enumerate()
         .map(|(i, sg)| sg.mul(t.pow([i as u64])).into_affine())
         .collect::<Vec<_>>();
+    let duration = start.elapsed();
+    println!("Compute Duration: {:?}", duration);
 
     // serialize and write to file
-    write_ptau_file(ptau_g1_contributed, ptau_g2_contributed, Path::new("contribution.ptau"))
+    let start = Instant::now();
+    write_ptau_file(ptau_g1_contributed, ptau_g2_contributed, Path::new("contribution.ptau"))?;
+    let duration = start.elapsed();
+    println!("Write Duration: {:?}", duration);
+    Ok(())
 }
 
 fn verify() {
@@ -81,6 +90,15 @@ fn verify() {
 }
 
 fn main() {
-    generate_initial().unwrap();
-    contribute().unwrap();
+    let start = Instant::now();
+    for domain_size in [12, 13, 14, 15] {
+        println!("Generating initial ptau setup for domain size {}", domain_size);
+        let start = Instant::now();
+        generate_initial(domain_size).unwrap();
+        contribute(domain_size).unwrap();
+        let duration = start.elapsed();
+        println!("Duration: {:?}", duration);
+    }
+    let duration = start.elapsed();
+    println!("Total duration: {:?}", duration);
 }
