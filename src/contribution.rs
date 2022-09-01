@@ -1,6 +1,5 @@
 use ark_bls12_381::{G1Affine, G2Affine};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use axum::extract::Json;
 use ruint::{aliases::U384, Uint};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
@@ -130,11 +129,4 @@ impl Default for Contributions {
             ],
         }
     }
-}
-
-#[instrument]
-pub async fn start(Json(payload): Json<serde_json::Value>) -> Json<serde_json::Value> {
-    dbg!(&payload);
-
-    Json(payload)
 }

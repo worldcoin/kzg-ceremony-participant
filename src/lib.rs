@@ -9,10 +9,12 @@ use ark_serialize::Read;
 use ark_serialize::Write;
 use ark_std::UniformRand;
 use eyre::Result;
+use js_sys::Promise;
 use rand::thread_rng;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
+use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_rayon::init_thread_pool;
 
 use crate::contribution::*;
