@@ -55,57 +55,63 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     // private contribution
     let t = ScalarField::rand(&mut rng);
 
-    let mut new_contributions = Contributions::default();
-
     let start_total = Instant::now();
 
-    for (idx, sub_contribution) in prev_contributions.sub_contributions.into_iter().enumerate() {
-        let num_g1_powers = sub_contribution.powers_of_tau.g1_powers.len();
-        let num_g2_powers = sub_contribution.powers_of_tau.g2_powers.len();
+    let contributions = prev_contributions
+        .sub_contributions
+        .to_vec()
+        .into_par_iter()
+        .map(|sub_contribution| {
+            let num_g1_powers = sub_contribution.powers_of_tau.g1_powers.len();
+            let num_g2_powers = sub_contribution.powers_of_tau.g2_powers.len();
 
-        // g1 powers
-        let start = Instant::now();
-        let ptau_g1_contributed: Vec<G1> = sub_contribution
-            .powers_of_tau
-            .g1_powers
-            .into_par_iter()
-            .enumerate()
-            .map(|(i, sg)| {
-                G1Affine::from(sg)
-                    .mul(t.pow([i as u64]))
-                    .into_affine()
-                    .into()
-            })
-            .collect::<Vec<_>>();
-        let duration = start.elapsed();
-        println!("g1 Duration: {:?}", duration);
+            // g1 powers
+            let start = Instant::now();
+            let ptau_g1_contributed: Vec<G1> = sub_contribution
+                .powers_of_tau
+                .g1_powers
+                .into_par_iter()
+                .enumerate()
+                .map(|(i, sg)| {
+                    G1Affine::from(sg)
+                        .mul(t.pow([i as u64]))
+                        .into_affine()
+                        .into()
+                })
+                .collect::<Vec<_>>();
+            let duration = start.elapsed();
+            println!("g1 Duration: {:?}", duration);
 
-        // g2 powers
-        let start = Instant::now();
-        let ptau_g2_contributed: Vec<G2> = sub_contribution
-            .powers_of_tau
-            .g2_powers
-            .into_par_iter()
-            .enumerate()
-            .map(|(i, sg)| {
-                G2Affine::from(sg)
-                    .mul(t.pow([i as u64]))
-                    .into_affine()
-                    .into()
-            })
-            .collect::<Vec<_>>();
-        let duration = start.elapsed();
-        println!("g2 Duration: {:?}", duration);
+            // g2 powers
+            let start = Instant::now();
+            let ptau_g2_contributed: Vec<G2> = sub_contribution
+                .powers_of_tau
+                .g2_powers
+                .into_par_iter()
+                .enumerate()
+                .map(|(i, sg)| {
+                    G2Affine::from(sg)
+                        .mul(t.pow([i as u64]))
+                        .into_affine()
+                        .into()
+                })
+                .collect::<Vec<_>>();
+            let duration = start.elapsed();
+            println!("g2 Duration: {:?}", duration);
 
-        let new_sub_contribution = Contribution::new(
-            num_g1_powers,
-            num_g2_powers,
-            ptau_g1_contributed,
-            ptau_g2_contributed,
-            None,
-        );
+            Contribution::new(
+                num_g1_powers,
+                num_g2_powers,
+                ptau_g1_contributed,
+                ptau_g2_contributed,
+                None,
+            )
+        })
+        .collect::<Vec<_>>();
 
-        new_contributions.sub_contributions[idx] = new_sub_contribution;
+    let mut new_contributions = Contributions::default();
+    for (idx, c) in contributions.into_iter().enumerate() {
+        new_contributions.sub_contributions[idx] = c;
     }
 
     println!("Total Duration: {:?}", start_total.elapsed());
