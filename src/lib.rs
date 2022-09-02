@@ -1,5 +1,5 @@
 mod contribution;
-use std::{fs::File, path::Path, time::Instant};
+use std::{fs::File, path::Path};
 use std::panic;
 
 use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine};
@@ -15,7 +15,7 @@ use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen_rayon::init_thread_pool;
+use wasm_bindgen_rayon::{init_thread_pool};
 
 use crate::contribution::*;
 
@@ -61,14 +61,11 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
 
     let mut new_contributions = Contributions::default();
 
-    let start_total = Instant::now();
-
     for (idx, sub_contribution) in prev_contributions.sub_contributions.into_iter().enumerate() {
         let num_g1_powers = sub_contribution.powers_of_tau.g1_powers.len();
         let num_g2_powers = sub_contribution.powers_of_tau.g2_powers.len();
 
         // g1 powers
-        let start = Instant::now();
         let ptau_g1_contributed: Vec<G1> = sub_contribution
             .powers_of_tau
             .g1_powers
@@ -81,11 +78,8 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
                     .into()
             })
             .collect::<Vec<_>>();
-        let duration = start.elapsed();
-        println!("g1 Duration: {:?}", duration);
 
         // g2 powers
-        let start = Instant::now();
         let ptau_g2_contributed: Vec<G2> = sub_contribution
             .powers_of_tau
             .g2_powers
@@ -98,8 +92,6 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
                     .into()
             })
             .collect::<Vec<_>>();
-        let duration = start.elapsed();
-        println!("g2 Duration: {:?}", duration);
 
         let new_sub_contribution = Contribution::new(
             num_g1_powers,
@@ -112,41 +104,17 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
         new_contributions.sub_contributions[idx] = new_sub_contribution;
     }
 
-    println!("Total Duration: {:?}", start_total.elapsed());
-
     Ok(new_contributions)
 }
 
 #[wasm_bindgen]
-pub fn init(n: usize) -> Promise {
+pub fn xxx(n: usize) -> Promise {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     init_thread_pool(n)
 }
 
-// #[wasm_bindgen]
-// pub fn greet(name: &str) -> String {
-//     let id = Identity::from_seed(b"secret");
-
-//     // generate merkle tree
-//     let leaf = Field::from(0_u32);
-//     let mut tree = PoseidonTree::new(21, leaf);
-//     tree.set(0, id.commitment());
-
-//     let merkle_proof = tree.proof(0).expect("proof should exist");
-
-//     // change signal and external_nullifier here
-//     let signal_hash = hash_to_field(b"xxx");
-//     let external_nullifier_hash = hash_to_field(b"appId");
-
-//     let nullifier_hash = generate_nullifier_hash(&id, external_nullifier_hash);
-
-//     let witness = semaphore::protocol::generate_witness(&id, &merkle_proof, external_nullifier_hash, signal_hash).unwrap();
-
-//     //////
-    
-//     let proof = semaphore::protocol::generate_proof_with_witness(witness).unwrap();
-
-//     // generate_proof(&id, &merkle_proof, external_nullifier_hash, signal_hash);
-
-//     return format!("{:?}", proof);
-// }
+#[wasm_bindgen]
+pub fn contribute_wasm(input: &str) -> String {
+    let response = contribute_with_string(input.to_string()).unwrap();
+    return format!("{}", response);
+}

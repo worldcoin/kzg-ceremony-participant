@@ -1,12 +1,17 @@
-import init, {greet} from "./pkg/hello_wasm.js";
-import {xxx} from "./pkg/hello_wasm.js";
-
+import init, {xxx, contribute_wasm} from "./pkg/kate_ptau_rs.js";
 await init();
-await xxx(navigator.hardwareConcurrency);
 
-var startTime = performance.now()
-var proof = greet("ss");
-var endTime = performance.now()
+console.log("threads:", navigator.hardwareConcurrency);
 
-console.log(`Call to doSomething took ${endTime - startTime} milliseconds`)
-console.log(proof);
+await xxx(1);
+
+fetch('./initialContribution.json').then(response => {
+    response.json().then(data => {
+        var json_string = JSON.stringify(data);
+        var startTime = performance.now()
+        console.log("start");
+        var res = contribute_wasm(json_string);
+        var endTime = performance.now()
+        console.log(`Contribution took ${endTime - startTime} milliseconds`)
+    });
+});
