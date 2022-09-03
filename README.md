@@ -1,6 +1,6 @@
 # KZG Ceremony Participant
 
-> ⚠️ This project is still heavy WIP. 
+> ⚠️ This project is still heavy WIP.
 
 Implemensts a participant client for the KZG powers of tau ceremony according this [spec](https://github.com/ethereum/kzg-ceremony-specs).
 
@@ -16,17 +16,25 @@ Implemensts a participant client for the KZG powers of tau ceremony according th
 - Run tests: `cargo test --target aarch64-apple-darwin`
 - Build: `cargo run --release --target aarch64-apple-darwin`
 
-### wasm
+### Wasm
 - Build: `wasm-pack build --target web -d wasm/pkg`
 - Run server: `python3 ./wasm/server.py`
 
+## Benchmarks
+
+### Native
+- Apple M1 Max (10 threads): `2.68s`  
+
+### Wasm
+- Apple M1 Max, Chrome (10 threads): `14.70s` 
+- Apple M1 Max, Chrome (1 thread): `112.33s` 
 
 ## TODO
 - [ ] Create some nice issues for others to pick up 
 - [ ] G2 serialization and tests (according to zcash spec)
 - [x] Merge wasm implementation
-- [ ] Use [blst](https://github.com/supranational/blst/tree/master/bindings/rust) instead of ark_bls12_381
-- [ ] Add benchmarks
+- [ ] Evaluate [blst](https://github.com/supranational/blst/tree/master/bindings/rust) instead of ark_bls12_381
+- [x] Add benchmarks
 - [ ] Implement pot_pubkey
 - [ ] Running Product Subgroup check 
 - [ ] Fix wasm for firefox (not checked) and safari
