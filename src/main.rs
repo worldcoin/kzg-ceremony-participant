@@ -4,6 +4,8 @@ use std::{fs::File, path::Path, time::Instant};
 use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine};
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::Field;
+use ark_serialize::CanonicalDeserialize;
+use ark_serialize::CanonicalSerialize;
 use ark_serialize::Read;
 use ark_serialize::Write;
 use ark_std::UniformRand;
@@ -12,6 +14,9 @@ use rand::thread_rng;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
+use ruint::aliases::U384;
+use ruint::uint;
+use ruint::Uint;
 
 use crate::contribution::*;
 
@@ -125,4 +130,33 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
 
 fn main() {
     contribute_with_file(Path::new("initialContribution.json"), Path::new("out.json")).unwrap();
+}
+
+#[cfg(test)]
+pub mod test {
+    use ark_bls12_381::G1Affine;
+    use ark_ec::AffineCurve;
+    use ruint::{aliases::U384, uint};
+
+    use crate::contribution::G1;
+
+    #[test]
+    fn test_serialize() {
+        let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
+        let p: G1 = g1.into();
+        let p: U384 = p.into();
+        let p = format!("{:#02x}", p);
+
+        assert_eq!(p, "0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb");
+    }
+
+    #[test]
+    fn test_deserialize() {
+        let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
+        let p = uint!(0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb_U384);
+        let p: G1 = p.into();
+        let p: G1Affine = g1.into();
+
+        assert_eq!(p, g1);
+    }
 }
