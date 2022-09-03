@@ -124,14 +124,14 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
 
 #[cfg(test)]
 pub mod test {
-    use ark_bls12_381::G1Affine;
+    use ark_bls12_381::{G1Affine, G2Affine};
     use ark_ec::AffineCurve;
     use ruint::{aliases::U384, uint};
 
-    use crate::contribution::G1;
+    use crate::contribution::{G1, G2, U768};
 
     #[test]
-    fn test_serialize() {
+    fn test_serialize_g1() {
         let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
         let p: G1 = g1.into();
         let p: U384 = p.into();
@@ -141,12 +141,32 @@ pub mod test {
     }
 
     #[test]
-    fn test_deserialize() {
+    fn test_deserialize_g1() {
         let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
         let p = uint!(0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb_U384);
         let p: G1 = p.into();
         let p: G1Affine = g1.into();
 
         assert_eq!(p, g1);
+    }
+
+    #[test]
+    fn test_serialize_g2() {
+        let g2 = ark_bls12_381::G2Affine::prime_subgroup_generator();
+        let p: G2 = g2.into();
+        let p: U768 = p.into();
+        let p = format!("{:#02x}", p);
+
+        assert_eq!(p, "0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8");
+    }
+
+    #[test]
+    fn test_deserialize_g2() {
+        let g2 = ark_bls12_381::G2Affine::prime_subgroup_generator();
+        let p = uint!(0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8_U768);
+        let p: G2 = p.into();
+        let p: G2Affine = g2.into();
+
+        assert_eq!(p, g2);
     }
 }

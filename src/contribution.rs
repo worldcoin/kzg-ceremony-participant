@@ -67,19 +67,31 @@ impl From<U768> for G2 {
     }
 }
 
+impl From<G2> for U768 {
+    fn from(u: G2) -> Self {
+        u.0
+    }
+}
+
 impl From<G2Affine> for G2 {
     fn from(g: G2Affine) -> Self {
         let mut buffer = [0u8; 96];
         g.serialize(&mut buffer[..])
             .expect("g2 serialization failed");
+        // set the third most significant bit to the same as the first bit (signal)
+        buffer[95] &= ((buffer[95] & 0x20) << 2) | 0x7F;
+        // set the most significant bit to 1 (compressed form)
+        buffer[95] |= 0x80;
         G2(U768::from_le_bytes(buffer))
     }
 }
 
 impl From<G2> for G2Affine {
     fn from(g: G2) -> Self {
-        let buffer = g.0.as_le_slice();
-        G2Affine::deserialize(buffer).unwrap()
+        let mut buffer: [u8; 96] = g.0.as_le_slice().try_into().unwrap();
+        // set the most significant bit to the same as the third bit (signal)
+        buffer[95] &= ((buffer[95] & 0x80) >> 2) | 0xDF;
+        G2Affine::deserialize(&mut &buffer[..]).unwrap()
     }
 }
 
