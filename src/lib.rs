@@ -1,11 +1,9 @@
 mod contribution;
 
-// feature flag
-#[cfg(target_arch = "wasm32-unknown-unknown")]
+#[cfg(target_family = "wasm")]
 mod wasm;
 
-use std::panic;
-use std::{fs::File, path::Path, time::Instant};
+use std::{fs::File, path::Path};
 
 use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine};
 use ark_ec::{AffineCurve, ProjectiveCurve};
@@ -66,8 +64,6 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     // private contribution
     let t = ScalarField::rand(&mut rng);
 
-    let start_total = Instant::now();
-
     let contributions = prev_contributions
         .sub_contributions
         .to_vec()
@@ -77,7 +73,6 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
             let num_g2_powers = sub_contribution.powers_of_tau.g2_powers.len();
 
             // g1 powers
-            let start = Instant::now();
             let ptau_g1_contributed: Vec<G1> = sub_contribution
                 .powers_of_tau
                 .g1_powers
@@ -90,11 +85,8 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
                         .into()
                 })
                 .collect::<Vec<_>>();
-            let duration = start.elapsed();
-            println!("g1 Duration: {:?}", duration);
 
             // g2 powers
-            let start = Instant::now();
             let ptau_g2_contributed: Vec<G2> = sub_contribution
                 .powers_of_tau
                 .g2_powers
@@ -107,8 +99,6 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
                         .into()
                 })
                 .collect::<Vec<_>>();
-            let duration = start.elapsed();
-            println!("g2 Duration: {:?}", duration);
 
             Contribution::new(
                 num_g1_powers,
@@ -124,8 +114,6 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     for (idx, c) in contributions.into_iter().enumerate() {
         new_contributions.sub_contributions[idx] = c;
     }
-
-    println!("Total Duration: {:?}", start_total.elapsed());
 
     Ok(new_contributions)
 }

@@ -1,9 +1,9 @@
-import init, {xxx, contribute_wasm} from "./pkg/kate_ptau_rs.js";
+import init, {init_threads, contribute_wasm} from "./pkg/kate_ptau_rs.js";
+
+console.log("available threads:", navigator.hardwareConcurrency);
+
 await init();
-
-console.log("threads:", navigator.hardwareConcurrency);
-
-await xxx(1);
+await init_threads(navigator.hardwareConcurrency);
 
 fetch('./initialContribution.json').then(response => {
     response.json().then(data => {
