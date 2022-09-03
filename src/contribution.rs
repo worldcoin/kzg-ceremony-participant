@@ -1,4 +1,4 @@
-use ark_bls12_381::{G1Affine, G2Affine};
+use ark_bls12_381::{G1Affine, G2Affine, Fq};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ruint::{aliases::U384, Uint};
 use serde::{Deserialize, Serialize};
@@ -29,19 +29,34 @@ impl From<U384> for G1 {
     }
 }
 
+impl From<G1> for U384 {
+    fn from(u: G1) -> Self {
+        u.0
+    }
+}
+
 impl From<G1Affine> for G1 {
     fn from(g: G1Affine) -> Self {
         let mut buffer = [0u8; 48];
+        
         g.serialize(&mut buffer[..])
             .expect("g1 serialization failed");
+        let h = hex::encode(buffer);
+        // set the third most significant bit to the same as the first bit (signal)
+        buffer[47] &= ((buffer[47] & 0x20) << 2) | 0x7F;
+        // set the most significant bit to 1 (compressed form)
+        buffer[47] |= 0x80;
+        let h = hex::encode(buffer);
         G1(U384::from_le_bytes(buffer))
     }
 }
 
 impl From<G1> for G1Affine {
     fn from(g: G1) -> Self {
-        let buffer = g.0.as_le_slice();
-        G1Affine::deserialize(buffer).unwrap()
+        let mut buffer: [u8; 48]= g.0.as_le_slice().try_into().unwrap();
+        // set the most significant bit to the same as the third bit (signal)
+        buffer[47] &= ((buffer[47] & 0x80) >> 2) | 0xDF;
+        G1Affine::deserialize(&mut &buffer[..]).unwrap()
     }
 }
 
