@@ -8,8 +8,6 @@ use std::{fs::File, path::Path};
 use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine};
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::Field;
-use ark_serialize::CanonicalDeserialize;
-use ark_serialize::CanonicalSerialize;
 use ark_serialize::Read;
 use ark_serialize::Write;
 use ark_std::UniformRand;
@@ -18,11 +16,11 @@ use rand::thread_rng;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
-use ruint::aliases::U384;
-use ruint::uint;
-use ruint::Uint;
+use rayon::prelude::IntoParallelRefIterator;
 
 use crate::contribution::*;
+
+const MAX_POWERS_OF_TAU: usize = 1 << 15;
 
 fn load_json_file(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
@@ -64,6 +62,35 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     // private contribution
     let t = ScalarField::rand(&mut rng);
 
+    // calculate powers of tau
+    let ptau = (0..MAX_POWERS_OF_TAU)
+        .into_par_iter()
+        .map(|i| t.pow([i as u64]))
+        .collect::<Vec<_>>();
+
+    // we assume the last contribution entry contains all elements of the setup
+    let contributions = prev_contributions.sub_contributions.to_vec();
+    let full_contribution = contributions.last().unwrap();
+
+    // calculate all the g1 powers
+    let all_g1_tau: Vec<G1> = full_contribution
+        .powers_of_tau
+        .g1_powers
+        .par_iter()
+        .enumerate()
+        .map(|(i, &sg)| G1Affine::from(sg).mul(ptau[i]).into_affine().into())
+        .collect::<Vec<_>>();
+
+    // calculate the g2 powers (always same size)
+    let all_g2_tau: Vec<G2> = full_contribution
+        .powers_of_tau
+        .g2_powers
+        .par_iter()
+        .enumerate()
+        .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
+        .collect::<Vec<_>>();
+
+    // fill our data structure with the result
     let contributions = prev_contributions
         .sub_contributions
         .to_vec()
@@ -72,39 +99,11 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
             let num_g1_powers = sub_contribution.powers_of_tau.g1_powers.len();
             let num_g2_powers = sub_contribution.powers_of_tau.g2_powers.len();
 
-            // g1 powers
-            let ptau_g1_contributed: Vec<G1> = sub_contribution
-                .powers_of_tau
-                .g1_powers
-                .into_par_iter()
-                .enumerate()
-                .map(|(i, sg)| {
-                    G1Affine::from(sg)
-                        .mul(t.pow([i as u64]))
-                        .into_affine()
-                        .into()
-                })
-                .collect::<Vec<_>>();
-
-            // g2 powers
-            let ptau_g2_contributed: Vec<G2> = sub_contribution
-                .powers_of_tau
-                .g2_powers
-                .into_par_iter()
-                .enumerate()
-                .map(|(i, sg)| {
-                    G2Affine::from(sg)
-                        .mul(t.pow([i as u64]))
-                        .into_affine()
-                        .into()
-                })
-                .collect::<Vec<_>>();
-
             Contribution::new(
                 num_g1_powers,
                 num_g2_powers,
-                ptau_g1_contributed,
-                ptau_g2_contributed,
+                all_g1_tau[..num_g1_powers].to_vec(),
+                all_g2_tau[..num_g2_powers].to_vec(),
                 None,
             )
         })

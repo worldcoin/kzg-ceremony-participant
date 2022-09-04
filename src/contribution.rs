@@ -1,8 +1,7 @@
-use ark_bls12_381::{Fq, G1Affine, G2Affine};
+use ark_bls12_381::{G1Affine, G2Affine};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ruint::{aliases::U384, Uint};
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
 
 pub type U768 = Uint<768, 12>;
 
