@@ -23,11 +23,11 @@ Implemensts a participant client for the KZG powers of tau ceremony according th
 ## Benchmarks
 
 ### Native
-- Apple M1 Max (10 threads): `2.68s`  
+- Apple M1 Max (10 threads): `1.44s`  
 
 ### Wasm
-- Apple M1 Max, Chrome (10 threads): `14.70s` 
-- Apple M1 Max, Chrome (1 thread): `112.33s` 
+- Apple M1 Max, Chrome (10 threads): `7.87s` 
+- Apple M1 Max, Chrome (1 thread): `58.95s` 
 
 ## TODO
 - [ ] Create some nice issues for others to pick up 
