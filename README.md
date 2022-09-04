@@ -31,7 +31,7 @@ Implemensts a participant client for the KZG powers of tau ceremony according th
 
 ## TODO
 - [ ] Create some nice issues for others to pick up 
-- [ ] G2 serialization and tests (according to zcash spec)
+- [x] G2 serialization and tests (according to zcash spec)
 - [x] Merge wasm implementation
 - [ ] Evaluate [blst](https://github.com/supranational/blst/tree/master/bindings/rust) instead of ark_bls12_381
 - [x] Add benchmarks
