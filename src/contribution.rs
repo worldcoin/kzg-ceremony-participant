@@ -28,7 +28,6 @@ impl From<G1BLST> for MaybeUninit<blst_p1> {
 impl BLST for G1BLST {
     fn mul(&self, scalar: U256) -> Self {
         let mut buffer: [u8; 32] = scalar.as_le_slice().try_into().unwrap();
-        buffer.reverse();
 
         let mut tmp = MaybeUninit::<blst_p1>::zeroed();
         unsafe {
