@@ -1,9 +1,42 @@
+use std::mem::MaybeUninit;
+
 use ark_bls12_381::{G1Affine, G2Affine};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ruint::{aliases::U384, Uint};
+use blst::{blst_encode_to_g1, blst_p1, blst_p1_compress, blst_p1_uncompress, blst_p1_affine, blst_p1_to_affine, blst_p1_affine_compress, blst_p1_from_affine, blst_p1_mult, blst_scalar, blst_scalar_from_le_bytes};
+use ruint::{aliases::{U384, U256}, Uint};
 use serde::{Deserialize, Serialize};
 
 pub type U768 = Uint<768, 12>;
+
+pub trait BLST {
+    fn mul(&self, scalar: U256) -> Self;
+}
+pub struct G1BLST(MaybeUninit<blst_p1>);
+
+impl From<MaybeUninit<blst_p1>> for G1BLST {
+    fn from(u: MaybeUninit<blst_p1>) -> Self {
+        G1BLST(u)
+    }
+}
+
+impl From<G1BLST> for MaybeUninit<blst_p1> {
+    fn from(u: G1BLST) -> Self {
+        u.0
+    }
+}
+
+impl BLST for G1BLST {
+    fn mul(&self, scalar: U256) -> Self {
+        let mut buffer: [u8; 32] = scalar.as_le_slice().try_into().unwrap();
+        buffer.reverse();
+
+        let mut tmp = MaybeUninit::<blst_p1>::zeroed();
+        unsafe {
+            blst_p1_mult(tmp.as_mut_ptr(), self.0.as_ptr(), buffer.as_ptr(), 256);
+        }
+        tmp.into()
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum IdType {
@@ -54,6 +87,36 @@ impl From<G1> for G1Affine {
         // set the most significant bit to the same as the third bit (signal)
         buffer[47] &= ((buffer[47] & 0x80) >> 2) | 0xDF;
         G1Affine::deserialize(&mut &buffer[..]).unwrap()
+    }
+}
+
+impl From<G1BLST> for G1 {
+    fn from(g: G1BLST) -> Self {
+        let mut buffer = [0u8; 48];
+        unsafe {
+            blst_p1_compress(buffer.as_mut_ptr(), g.0.as_ptr());
+        }
+        buffer.reverse();
+        G1(U384::from_le_bytes(buffer))
+    }
+}
+
+impl From<G1> for G1BLST {
+    fn from(g: G1) -> Self {
+        let mut buffer: [u8; 48] = g.0.as_le_slice().try_into().unwrap();
+        buffer.reverse();
+
+        let mut p1 = std::mem::MaybeUninit::<blst_p1_affine>::zeroed();
+        unsafe {
+            blst_p1_uncompress(p1.as_mut_ptr(), buffer.as_ptr());
+        }
+
+        let mut p2 = std::mem::MaybeUninit::<blst_p1>::zeroed();
+        unsafe {
+            blst_p1_from_affine(p2.as_mut_ptr(), p1.as_ptr())
+        }
+
+        p2.into()
     }
 }
 

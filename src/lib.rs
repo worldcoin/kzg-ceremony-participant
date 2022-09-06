@@ -18,6 +18,8 @@ use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
 
+use crate::contribution::BLST;
+
 use crate::contribution::*;
 
 const MAX_POWERS_OF_TAU: usize = 1 << 15;
@@ -73,22 +75,25 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     let full_contribution = contributions.last().unwrap();
 
     // calculate all the g1 powers
-    let all_g1_tau: Vec<G1> = full_contribution
+    let all_g1_tau: Vec<G1BLST> = full_contribution
         .powers_of_tau
         .g1_powers
         .par_iter()
         .enumerate()
-        .map(|(i, &sg)| G1Affine::from(sg).mul(ptau[i]).into_affine().into())
+        .map(|(i, &sg)| {
+            let p : G1BLST = sg.into();
+            p.mul(ptau[i].into())
+        })
         .collect::<Vec<_>>();
 
     // calculate the g2 powers (always same size)
-    let all_g2_tau: Vec<G2> = full_contribution
-        .powers_of_tau
-        .g2_powers
-        .par_iter()
-        .enumerate()
-        .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
-        .collect::<Vec<_>>();
+    // let all_g2_tau: Vec<G2> = full_contribution
+    //     .powers_of_tau
+    //     .g2_powers
+    //     .par_iter()
+    //     .enumerate()
+    //     .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
+    //     .collect::<Vec<_>>();
 
     // fill our data structure with the result
     let contributions = prev_contributions
@@ -102,8 +107,10 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
             Contribution::new(
                 num_g1_powers,
                 num_g2_powers,
-                all_g1_tau[..num_g1_powers].to_vec(),
-                all_g2_tau[..num_g2_powers].to_vec(),
+                vec![],
+                // all_g1_tau[..num_g1_powers].to_vec(),
+                vec![],
+                // all_g2_tau[..num_g2_powers].to_vec(),
                 None,
             )
         })
@@ -123,49 +130,76 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
 
 #[cfg(test)]
 pub mod test {
+    use std::mem::MaybeUninit;
+
     use ark_bls12_381::{G1Affine, G2Affine};
     use ark_ec::AffineCurve;
+    use blst::{blst_p1_generator, blst_p1_mult, blst_p1};
     use ruint::{aliases::U384, uint};
 
-    use crate::contribution::{G1, G2, U768};
+    use crate::contribution::{G1, G2, U768, G1BLST};
 
     #[test]
-    fn test_serialize_g1() {
-        let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
-        let p: G1 = g1.into();
-        let p: U384 = p.into();
-        let p = format!("{:#02x}", p);
-
-        assert_eq!(p, "0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb");
-    }
-
-    #[test]
-    fn test_deserialize_g1() {
-        let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
+    fn test_blst() {
         let p = uint!(0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb_U384);
-        let p: G1 = p.into();
-        let p: G1Affine = g1.into();
+        let x : G1 = p.into();
 
-        assert_eq!(p, g1);
+        let y : G1BLST;
+        unsafe {
+            let mut tmp = std::mem::MaybeUninit::<blst_p1>::zeroed();
+            tmp.write(*blst_p1_generator());
+            y = tmp.into();
+        }
+        let y: G1 = y.into();
+
+        assert_eq!(x, y);
+
+        // other direction
+
+        let xx : G1BLST = x.into();
+        let xx : G1 = xx.into();
+
+        assert_eq!(x, xx);
     }
 
-    #[test]
-    fn test_serialize_g2() {
-        let g2 = ark_bls12_381::G2Affine::prime_subgroup_generator();
-        let p: G2 = g2.into();
-        let p: U768 = p.into();
-        let p = format!("{:#02x}", p);
 
-        assert_eq!(p, "0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8");
-    }
+    // #[test]
+    // fn test_serialize_g1() {
+    //     let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
+    //     let p: G1 = g1.into();
+    //     let p: U384 = p.into();
+    //     let p = format!("{:#02x}", p);
 
-    #[test]
-    fn test_deserialize_g2() {
-        let g2 = ark_bls12_381::G2Affine::prime_subgroup_generator();
-        let p = uint!(0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8_U768);
-        let p: G2 = p.into();
-        let p: G2Affine = g2.into();
+    //     assert_eq!(p, "0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb");
+    // }
 
-        assert_eq!(p, g2);
-    }
+    // #[test]
+    // fn test_deserialize_g1() {
+    //     let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
+    //     let p = uint!(0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb_U384);
+    //     let p: G1 = p.into();
+    //     let p: G1Affine = g1.into();
+
+    //     assert_eq!(p, g1);
+    // }
+
+    // #[test]
+    // fn test_serialize_g2() {
+    //     let g2 = ark_bls12_381::G2Affine::prime_subgroup_generator();
+    //     let p: G2 = g2.into();
+    //     let p: U768 = p.into();
+    //     let p = format!("{:#02x}", p);
+
+    //     assert_eq!(p, "0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8");
+    // }
+
+    // #[test]
+    // fn test_deserialize_g2() {
+    //     let g2 = ark_bls12_381::G2Affine::prime_subgroup_generator();
+    //     let p = uint!(0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8_U768);
+    //     let p: G2 = p.into();
+    //     let p: G2Affine = g2.into();
+
+    //     assert_eq!(p, g2);
+    // }
 }
