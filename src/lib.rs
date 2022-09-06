@@ -87,13 +87,13 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
         .collect::<Vec<_>>();
 
     // calculate the g2 powers (always same size)
-    // let all_g2_tau: Vec<G2> = full_contribution
-    //     .powers_of_tau
-    //     .g2_powers
-    //     .par_iter()
-    //     .enumerate()
-    //     .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
-    //     .collect::<Vec<_>>();
+    let all_g2_tau: Vec<G2> = full_contribution
+        .powers_of_tau
+        .g2_powers
+        .par_iter()
+        .enumerate()
+        .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
+        .collect::<Vec<_>>();
 
     // fill our data structure with the result
     let contributions = prev_contributions
