@@ -76,21 +76,16 @@ impl From<G1BlstAffineBatch> for Vec<G1BlstAffine> {
 impl From<G1BlstProjectiveBatch> for G1BlstAffineBatch {
     fn from(u: G1BlstProjectiveBatch) -> Self {
         let size = u.0.len();
-        let input = u.0.into_iter().map(|x| x.0.as_ptr()).collect::<Vec<_>>()[..].as_ptr();
+        let input = u.0.into_iter().map(|x| x.0.as_ptr()).collect::<Vec<_>>();
 
-        let mut tmp = vec![MaybeUninit::<blst_p1_affine>::uninit(); size];
-        let mut ptr = tmp.as_mut_ptr() as *mut blst_p1_affine;
         unsafe {
-            blst_p1s_to_affine( ptr, input, size);
+            let mut out = vec![MaybeUninit::<blst_p1_affine>::uninit(); size];
+            let mut ptr = out.as_mut_ptr() as *mut blst_p1_affine;
 
-            let xx = slice::from_raw_parts(ptr, size);
-            println!("xx: {:?}", xx[0]);
+            blst_p1s_to_affine( ptr, input.as_ptr(), size);
 
-            let xx = slice::from_raw_parts(input, size);
-            println!("xx: {:?}", *xx[0]);
+            G1BlstAffineBatch(out.into_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
         }
-
-        G1BlstAffineBatch(tmp.into_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
     }
 }
 
