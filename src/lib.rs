@@ -3,6 +3,7 @@ mod contribution;
 #[cfg(target_family = "wasm")]
 mod wasm;
 
+use std::time::Instant;
 use std::{fs::File, path::Path};
 
 use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine};
@@ -13,12 +14,12 @@ use ark_serialize::Write;
 use ark_std::UniformRand;
 use eyre::Result;
 use rand::thread_rng;
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
-
-use crate::contribution::BLST;
 
 use crate::contribution::*;
 
@@ -59,7 +60,8 @@ pub fn contribute_with_string(json: String) -> Result<String> {
  * Apply a user's contibution to the setup
  */
 fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
-    let mut rng = thread_rng();
+    // let mut rng = thread_rng();
+    let mut rng = ChaCha8Rng::seed_from_u64(1337);
 
     // private contribution
     let t = ScalarField::rand(&mut rng);
@@ -74,17 +76,31 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     let contributions = prev_contributions.sub_contributions.to_vec();
     let full_contribution = contributions.last().unwrap();
 
+    let start = Instant::now();
     // calculate all the g1 powers
-    let all_g1_tau: Vec<G1BLST> = full_contribution
+    let all_g1_tau: Vec<G1BlstProjective> = full_contribution
         .powers_of_tau
         .g1_powers
         .par_iter()
         .enumerate()
         .map(|(i, &sg)| {
-            let p : G1BLST = sg.into();
+            let p: G1BlstAffine = sg.into();
+            let p: G1BlstProjective = p.into();
             p.mul(ptau[i].into())
         })
+        .collect::<Vec<_>>()
+        .into();
+
+    let all_g1_tau: G1BlstProjectiveBatch = all_g1_tau.into();
+    let all_g1_tau: G1BlstAffineBatch = all_g1_tau.into();
+    let all_g1_tau: Vec<G1BlstAffine> = all_g1_tau.into();
+
+    let all_g1_tau: Vec<G1> = all_g1_tau
+        .into_par_iter()
+        .map(|sg| sg.into())
         .collect::<Vec<_>>();
+        
+    println!("total time: {:?}", start.elapsed());
 
     // calculate the g2 powers (always same size)
     let all_g2_tau: Vec<G2> = full_contribution
@@ -107,10 +123,8 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
             Contribution::new(
                 num_g1_powers,
                 num_g2_powers,
-                vec![],
-                // all_g1_tau[..num_g1_powers].to_vec(),
-                vec![],
-                // all_g2_tau[..num_g2_powers].to_vec(),
+                all_g1_tau[..num_g1_powers].to_vec(),
+                all_g2_tau[..num_g2_powers].to_vec(),
                 None,
             )
         })
@@ -130,38 +144,37 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
 
 #[cfg(test)]
 pub mod test {
-    use std::mem::MaybeUninit;
+    // use std::mem::MaybeUninit;
 
-    use ark_bls12_381::{G1Affine, G2Affine};
-    use ark_ec::AffineCurve;
-    use blst::{blst_p1_generator, blst_p1_mult, blst_p1};
-    use ruint::{aliases::U384, uint};
+    // use ark_bls12_381::{G1Affine, G2Affine};
+    // use ark_ec::AffineCurve;
+    // use blst::{blst_p1_generator, blst_p1_mult, blst_p1};
+    // use ruint::{aliases::U384, uint};
 
-    use crate::contribution::{G1, G2, U768, G1BLST};
+    // use crate::contribution::{G1, G2, U768};
 
-    #[test]
-    fn test_blst() {
-        let p = uint!(0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb_U384);
-        let x : G1 = p.into();
+    // #[test]
+    // fn test_blst() {
+    //     let p = uint!(0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb_U384);
+    //     let x : G1 = p.into();
 
-        let y : G1BLST;
-        unsafe {
-            let mut tmp = std::mem::MaybeUninit::<blst_p1>::zeroed();
-            tmp.write(*blst_p1_generator());
-            y = tmp.into();
-        }
-        let y: G1 = y.into();
+    //     let y : G1BLST;
+    //     unsafe {
+    //         let mut tmp = std::mem::MaybeUninit::<blst_p1>::zeroed();
+    //         tmp.write(*blst_p1_generator());
+    //         y = tmp.into();
+    //     }
+    //     let y: G1 = y.into();
 
-        assert_eq!(x, y);
+    //     assert_eq!(x, y);
 
-        // other direction
+    //     // other direction
 
-        let xx : G1BLST = x.into();
-        let xx : G1 = xx.into();
+    //     let xx : G1BLST = x.into();
+    //     let xx : G1 = xx.into();
 
-        assert_eq!(x, xx);
-    }
-
+    //     assert_eq!(x, xx);
+    // }
 
     // #[test]
     // fn test_serialize_g1() {

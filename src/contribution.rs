@@ -1,31 +1,120 @@
+use core::slice;
 use std::mem::MaybeUninit;
 
 use ark_bls12_381::{G1Affine, G2Affine};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use blst::{blst_encode_to_g1, blst_p1, blst_p1_compress, blst_p1_uncompress, blst_p1_affine, blst_p1_to_affine, blst_p1_affine_compress, blst_p1_from_affine, blst_p1_mult, blst_scalar, blst_scalar_from_le_bytes};
-use ruint::{aliases::{U384, U256}, Uint};
+use blst::{
+    blst_p1, blst_p1_affine, blst_p1_affine_compress, blst_p1_from_affine, blst_p1_mult,
+    blst_p1_uncompress, blst_p1s_to_affine, blst_p1_to_affine,
+};
+use rayon::prelude::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
+use ruint::{
+    aliases::{U256, U384},
+    Uint,
+};
 use serde::{Deserialize, Serialize};
 
 pub type U768 = Uint<768, 12>;
 
-pub trait BLST {
+pub trait BlstAlgebra {
     fn mul(&self, scalar: U256) -> Self;
 }
-pub struct G1BLST(MaybeUninit<blst_p1>);
+pub struct G1BlstProjective(MaybeUninit<blst_p1>);
+pub struct G1BlstAffine(MaybeUninit<blst_p1_affine>);
+pub struct G1BlstProjectiveBatch(Vec<G1BlstProjective>);
+pub struct G1BlstAffineBatch(Vec<G1BlstAffine>);
 
-impl From<MaybeUninit<blst_p1>> for G1BLST {
-    fn from(u: MaybeUninit<blst_p1>) -> Self {
-        G1BLST(u)
+impl From<MaybeUninit<blst_p1_affine>> for G1BlstAffine {
+    fn from(u: MaybeUninit<blst_p1_affine>) -> Self {
+        G1BlstAffine(u)
     }
 }
 
-impl From<G1BLST> for MaybeUninit<blst_p1> {
-    fn from(u: G1BLST) -> Self {
+impl From<G1BlstAffine> for MaybeUninit<blst_p1_affine> {
+    fn from(u: G1BlstAffine) -> Self {
         u.0
     }
 }
 
-impl BLST for G1BLST {
+impl From<MaybeUninit<blst_p1>> for G1BlstProjective {
+    fn from(u: MaybeUninit<blst_p1>) -> Self {
+        G1BlstProjective(u)
+    }
+}
+
+impl From<G1BlstProjective> for MaybeUninit<blst_p1> {
+    fn from(u: G1BlstProjective) -> Self {
+        u.0
+    }
+}
+
+impl From<Vec<G1BlstProjective>> for G1BlstProjectiveBatch {
+    fn from(u: Vec<G1BlstProjective>) -> Self {
+        G1BlstProjectiveBatch(u)
+    }
+}
+
+impl From<G1BlstProjectiveBatch> for Vec<G1BlstProjective> {
+    fn from(u: G1BlstProjectiveBatch) -> Self {
+        u.0
+    }
+}
+
+impl From<Vec<G1BlstAffine>> for G1BlstAffineBatch {
+    fn from(u: Vec<G1BlstAffine>) -> Self {
+        G1BlstAffineBatch(u)
+    }
+}
+
+impl From<G1BlstAffineBatch> for Vec<G1BlstAffine> {
+    fn from(u: G1BlstAffineBatch) -> Self {
+        u.0
+    }
+}
+
+impl From<G1BlstProjectiveBatch> for G1BlstAffineBatch {
+    fn from(u: G1BlstProjectiveBatch) -> Self {
+        let size = u.0.len();
+        let input = u.0.into_iter().map(|x| x.0.as_ptr()).collect::<Vec<_>>()[..].as_ptr();
+
+        let mut tmp = vec![MaybeUninit::<blst_p1_affine>::uninit(); size];
+        let mut ptr = tmp.as_mut_ptr() as *mut blst_p1_affine;
+        unsafe {
+            blst_p1s_to_affine( ptr, input, size);
+
+            let xx = slice::from_raw_parts(ptr, size);
+            println!("xx: {:?}", xx[0]);
+
+            let xx = slice::from_raw_parts(input, size);
+            println!("xx: {:?}", *xx[0]);
+        }
+
+        G1BlstAffineBatch(tmp.into_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
+    }
+}
+
+impl From<G1BlstProjective> for G1BlstAffine {
+    fn from(u: G1BlstProjective) -> Self {
+        let mut p = std::mem::MaybeUninit::<blst_p1_affine>::zeroed();
+        unsafe {
+            blst_p1_to_affine(p.as_mut_ptr(), u.0.as_ptr());
+        }
+        p.into()
+    }
+}
+
+impl From<G1BlstAffine> for G1BlstProjective {
+    fn from(u: G1BlstAffine) -> Self {
+        let mut p = std::mem::MaybeUninit::<blst_p1>::zeroed();
+        unsafe {
+            blst_p1_from_affine(p.as_mut_ptr(), u.0.as_ptr());
+        }
+        p.into()
+    }
+}
+
+impl BlstAlgebra for G1BlstProjective {
     fn mul(&self, scalar: U256) -> Self {
         let mut buffer: [u8; 32] = scalar.as_le_slice().try_into().unwrap();
 
@@ -36,6 +125,34 @@ impl BLST for G1BLST {
         tmp.into()
     }
 }
+
+impl From<G1BlstAffine> for G1 {
+    fn from(g: G1BlstAffine) -> Self {
+        let mut buffer = [0u8; 48];
+        unsafe {
+            blst_p1_affine_compress(buffer.as_mut_ptr(), g.0.as_ptr());
+        }
+        buffer.reverse();
+
+        G1(U384::from_le_bytes(buffer))
+    }
+}
+
+impl From<G1> for G1BlstAffine {
+    fn from(g: G1) -> Self {
+        let mut buffer: [u8; 48] = g.0.as_le_slice().try_into().unwrap();
+        buffer.reverse();
+
+        let mut p = std::mem::MaybeUninit::<blst_p1_affine>::zeroed();
+        unsafe {
+            blst_p1_uncompress(p.as_mut_ptr(), buffer.as_ptr());
+        }
+
+        p.into()
+    }
+}
+
+///////////////////////
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum IdType {
@@ -86,36 +203,6 @@ impl From<G1> for G1Affine {
         // set the most significant bit to the same as the third bit (signal)
         buffer[47] &= ((buffer[47] & 0x80) >> 2) | 0xDF;
         G1Affine::deserialize(&mut &buffer[..]).unwrap()
-    }
-}
-
-impl From<G1BLST> for G1 {
-    fn from(g: G1BLST) -> Self {
-        let mut buffer = [0u8; 48];
-        unsafe {
-            blst_p1_compress(buffer.as_mut_ptr(), g.0.as_ptr());
-        }
-        buffer.reverse();
-        G1(U384::from_le_bytes(buffer))
-    }
-}
-
-impl From<G1> for G1BLST {
-    fn from(g: G1) -> Self {
-        let mut buffer: [u8; 48] = g.0.as_le_slice().try_into().unwrap();
-        buffer.reverse();
-
-        let mut p1 = std::mem::MaybeUninit::<blst_p1_affine>::zeroed();
-        unsafe {
-            blst_p1_uncompress(p1.as_mut_ptr(), buffer.as_ptr());
-        }
-
-        let mut p2 = std::mem::MaybeUninit::<blst_p1>::zeroed();
-        unsafe {
-            blst_p1_from_affine(p2.as_mut_ptr(), p1.as_ptr())
-        }
-
-        p2.into()
     }
 }
 
