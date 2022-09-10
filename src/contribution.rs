@@ -31,6 +31,14 @@ impl From<MaybeUninit<blst_p1_affine>> for G1BlstAffine {
     }
 }
 
+impl From<blst_p1_affine> for G1BlstAffine {
+    fn from(u: blst_p1_affine) -> Self {
+        let mut p = std::mem::MaybeUninit::<blst_p1_affine>::zeroed();
+        p.write(u);
+        p.into()
+    }
+}
+
 impl From<G1BlstAffine> for MaybeUninit<blst_p1_affine> {
     fn from(u: G1BlstAffine) -> Self {
         u.0
@@ -76,16 +84,15 @@ impl From<G1BlstAffineBatch> for Vec<G1BlstAffine> {
 impl From<G1BlstProjectiveBatch> for G1BlstAffineBatch {
     fn from(u: G1BlstProjectiveBatch) -> Self {
         let size = u.0.len();
-        let input = u.0.into_iter().map(|x| x.0.as_ptr()).collect::<Vec<_>>();
+        let input = u.0.iter().map(|x| (*x).0.as_ptr()).collect::<Vec<_>>();
+        let mut out = Vec::<blst_p1_affine>::with_capacity(size);
 
         unsafe {
-            let mut out = vec![MaybeUninit::<blst_p1_affine>::uninit(); size];
-            let mut ptr = out.as_mut_ptr() as *mut blst_p1_affine;
-
-            blst_p1s_to_affine( ptr, input.as_ptr(), size);
-
-            G1BlstAffineBatch(out.into_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
+            blst_p1s_to_affine( out.as_mut_ptr(), input.as_ptr(), size);
+            out.set_len(size);
         }
+
+        G1BlstAffineBatch(out.into_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
     }
 }
 
