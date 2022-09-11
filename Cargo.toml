@@ -30,7 +30,8 @@ js-sys = { version = "0.3.58"}
 wasm-bindgen = { version = "0.2.74"}
 wasm-bindgen-rayon = { version = "1.0", features = ["no-bundler"]}
 
-[profile.release]
+[profile.release-optimized]
+inherits = "release"
 codegen-units = 1
 lto = true
 panic = "abort"

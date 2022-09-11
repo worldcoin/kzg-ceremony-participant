@@ -93,14 +93,7 @@ impl From<G1BlstProjectiveBatch> for G1BlstAffineBatch {
             blst_p1s_to_affine( out.as_mut_ptr(), input.as_ptr(), size);
             out.set_len(size);
 
-            // TODO: move subgroup check out of here
-            G1BlstAffineBatch(out.into_par_iter().map(|x| {
-                if (blst_p1_affine_in_g1(&x)) {
-                    x.into()
-                } else {
-                    panic!("not in g1");
-                }
-            }).collect::<Vec<G1BlstAffine>>())
+            G1BlstAffineBatch(out.into_par_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
         }
     }
 }

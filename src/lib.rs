@@ -78,7 +78,7 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     let full_contribution = contributions.last().unwrap();
 
     // calculate all the g1 powers
-    let start = Instant::now();
+    // let start = Instant::now();
     let all_g1_tau: Vec<G1BlstProjective> = full_contribution
         .powers_of_tau
         .g1_powers
@@ -91,13 +91,17 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
         })
         .collect::<Vec<_>>()
         .into();
-    println!("add tau: {:?}", start.elapsed());
+    // println!("add tau: {:?}", start.elapsed());
 
     let all_g1_tau: G1BlstProjectiveBatch = all_g1_tau.into();
+
+    // let start = Instant::now();
     let all_g1_tau: G1BlstAffineBatch = all_g1_tau.into();
+    // println!("projective to affine: {:?}", start.elapsed());
+
     let all_g1_tau: Vec<G1BlstAffine> = all_g1_tau.into();
 
-    let start = Instant::now();
+    // let start = Instant::now();
     let all_g1_tau: Vec<G1> = all_g1_tau
         .into_par_iter()
         .map(|sg| {
@@ -105,10 +109,10 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
             sg.into()
         })
         .collect::<Vec<_>>();
-    println!("subgroup check: {:?}", start.elapsed());
+    // println!("subgroup check: {:?}", start.elapsed());
 
     // calculate the g2 powers (always same size)
-    let start = Instant::now();
+    // let start = Instant::now();
     let all_g2_tau: Vec<G2> = full_contribution
         .powers_of_tau
         .g2_powers
@@ -116,7 +120,7 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
         .enumerate()
         .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
         .collect::<Vec<_>>();
-    println!("subgroup check: {:?}", start.elapsed());
+    // println!("g2 operations: {:?}", start.elapsed());
 
     // fill our data structure with the result
     let contributions = prev_contributions
