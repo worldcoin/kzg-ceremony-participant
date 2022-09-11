@@ -12,6 +12,7 @@ use ark_ff::Field;
 use ark_serialize::Read;
 use ark_serialize::Write;
 use ark_std::UniformRand;
+use blst::blst_p1_affine_in_g1;
 use eyre::Result;
 use rand::thread_rng;
 use rand::SeedableRng;
@@ -76,8 +77,8 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     let contributions = prev_contributions.sub_contributions.to_vec();
     let full_contribution = contributions.last().unwrap();
 
-    let start = Instant::now();
     // calculate all the g1 powers
+    let start = Instant::now();
     let all_g1_tau: Vec<G1BlstProjective> = full_contribution
         .powers_of_tau
         .g1_powers
@@ -90,19 +91,24 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
         })
         .collect::<Vec<_>>()
         .into();
+    println!("add tau: {:?}", start.elapsed());
 
     let all_g1_tau: G1BlstProjectiveBatch = all_g1_tau.into();
     let all_g1_tau: G1BlstAffineBatch = all_g1_tau.into();
     let all_g1_tau: Vec<G1BlstAffine> = all_g1_tau.into();
 
+    let start = Instant::now();
     let all_g1_tau: Vec<G1> = all_g1_tau
         .into_par_iter()
-        .map(|sg| sg.into())
+        .map(|sg| {
+            assert!(sg.is_in_subgroup());
+            sg.into()
+        })
         .collect::<Vec<_>>();
-        
-    println!("total time: {:?}", start.elapsed());
+    println!("subgroup check: {:?}", start.elapsed());
 
     // calculate the g2 powers (always same size)
+    let start = Instant::now();
     let all_g2_tau: Vec<G2> = full_contribution
         .powers_of_tau
         .g2_powers
@@ -110,6 +116,7 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
         .enumerate()
         .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
         .collect::<Vec<_>>();
+    println!("subgroup check: {:?}", start.elapsed());
 
     // fill our data structure with the result
     let contributions = prev_contributions

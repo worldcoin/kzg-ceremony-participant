@@ -5,7 +5,7 @@ use ark_bls12_381::{G1Affine, G2Affine};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use blst::{
     blst_p1, blst_p1_affine, blst_p1_affine_compress, blst_p1_from_affine, blst_p1_mult,
-    blst_p1_uncompress, blst_p1s_to_affine, blst_p1_to_affine,
+    blst_p1_uncompress, blst_p1s_to_affine, blst_p1_to_affine, blst_p1_affine_in_g1,
 };
 use rayon::prelude::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -19,7 +19,9 @@ pub type U768 = Uint<768, 12>;
 
 pub trait BlstAlgebra {
     fn mul(&self, scalar: U256) -> Self;
+    fn is_in_subgroup(&self) -> bool;
 }
+
 pub struct G1BlstProjective(MaybeUninit<blst_p1>);
 pub struct G1BlstAffine(MaybeUninit<blst_p1_affine>);
 pub struct G1BlstProjectiveBatch(Vec<G1BlstProjective>);
@@ -90,9 +92,16 @@ impl From<G1BlstProjectiveBatch> for G1BlstAffineBatch {
         unsafe {
             blst_p1s_to_affine( out.as_mut_ptr(), input.as_ptr(), size);
             out.set_len(size);
-        }
 
-        G1BlstAffineBatch(out.into_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
+            // TODO: move subgroup check out of here
+            G1BlstAffineBatch(out.into_par_iter().map(|x| {
+                if (blst_p1_affine_in_g1(&x)) {
+                    x.into()
+                } else {
+                    panic!("not in g1");
+                }
+            }).collect::<Vec<G1BlstAffine>>())
+        }
     }
 }
 
@@ -126,8 +135,26 @@ impl BlstAlgebra for G1BlstProjective {
         }
         tmp.into()
     }
+
+    fn is_in_subgroup(&self) -> bool {
+        // TODO
+        false
+    }
 }
 
+impl BlstAlgebra for G1BlstAffine {
+    fn mul(&self, scalar: U256) -> Self {
+        // TODO
+        Self(MaybeUninit::zeroed())
+    }
+
+    fn is_in_subgroup(&self) -> bool {
+        unsafe {
+            blst_p1_affine_in_g1(self.0.as_ptr())
+        }
+    }
+}
+    
 impl From<G1BlstAffine> for G1 {
     fn from(g: G1BlstAffine) -> Self {
         let mut buffer = [0u8; 48];
