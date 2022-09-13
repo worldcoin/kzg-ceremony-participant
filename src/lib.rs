@@ -1,5 +1,3 @@
-mod contribution;
-
 #[cfg(target_family = "wasm")]
 mod wasm;
 
@@ -12,13 +10,14 @@ use ark_serialize::Read;
 use ark_serialize::Write;
 use ark_std::UniformRand;
 use eyre::Result;
+use kzg_ceremony_crypto::ContributionJson;
+use kzg_ceremony_crypto::ContributionsJson;
 use rand::thread_rng;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
-
-use crate::contribution::*;
+use rayon::prelude::IntoParallelRefMutIterator;
 
 const MAX_POWERS_OF_TAU: usize = 1 << 15;
 
@@ -48,78 +47,50 @@ pub fn contribute_with_file(in_path: &Path, out_path: &Path) -> Result<()> {
  * We'll use this function in the wasm
  */
 pub fn contribute_with_string(json: String) -> Result<String> {
-    let prev = serde_json::from_str(&json).unwrap();
-    let post = contribute(serde_json::from_value::<Contributions>(prev)?)?;
+    let post = contribute(ContributionsJson::from_json(&json)?.parse()?)?;
     Ok(serde_json::to_string(&post)?)
 }
 
 /**
  * Apply a user's contibution to the setup
  */
-fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
+fn contribute(
+    contributions: Vec<kzg_ceremony_crypto::Contribution>,
+) -> Result<kzg_ceremony_crypto::ContributionsJson> {
+    let mut post_contributions = ContributionsJson::initial();
+
+    // generate randomness
+    // TODO: add externally generated seed based on user input
     let mut rng = thread_rng();
 
     // private contribution
-    let t = ScalarField::rand(&mut rng);
+    let tau = ScalarField::rand(&mut rng);
 
-    // calculate powers of tau
-    let ptau = (0..MAX_POWERS_OF_TAU)
-        .into_par_iter()
-        .map(|i| t.pow([i as u64]))
-        .collect::<Vec<_>>();
+    // we'll only use the last contribution, since all others are just subsets
+    let mut full_contribution = contributions.last().unwrap().clone();
 
-    // we assume the last contribution entry contains all elements of the setup
-    let contributions = prev_contributions.sub_contributions.to_vec();
-    let full_contribution = contributions.last().unwrap();
+    //subgroup check
+    full_contribution.subgroup_check();
 
-    // calculate all the g1 powers
-    let all_g1_tau: Vec<G1> = full_contribution
-        .powers_of_tau
-        .g1_powers
-        .par_iter()
-        .enumerate()
-        .map(|(i, &sg)| G1Affine::from(sg).mul(ptau[i]).into_affine().into())
-        .collect::<Vec<_>>();
+    // actual contribution
+    full_contribution.add_tau(&tau);
 
-    // calculate the g2 powers (always same size)
-    let all_g2_tau: Vec<G2> = full_contribution
-        .powers_of_tau
-        .g2_powers
-        .par_iter()
-        .enumerate()
-        .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
-        .collect::<Vec<_>>();
+    // encode the contribution
+    let contribution: ContributionJson = full_contribution.into();
 
-    // fill our data structure with the result
-    let contributions = prev_contributions
+    // construct the response
+    post_contributions
         .sub_contributions
-        .to_vec()
-        .into_par_iter()
-        .map(|sub_contribution| {
-            let num_g1_powers = sub_contribution.powers_of_tau.g1_powers.len();
-            let num_g2_powers = sub_contribution.powers_of_tau.g2_powers.len();
-
-            Contribution::new(
-                num_g1_powers,
-                num_g2_powers,
-                all_g1_tau[..num_g1_powers].to_vec(),
-                all_g2_tau[..num_g2_powers].to_vec(),
-                None,
-            )
+        .par_iter_mut()
+        .map(|el| {
+            el.powers_of_tau.g1_powers = contribution.powers_of_tau.g1_powers[..el.num_g1_powers].to_vec();
+            el.powers_of_tau.g2_powers = contribution.powers_of_tau.g1_powers[..el.num_g2_powers].to_vec();
+            // TODO: set potkey
         })
         .collect::<Vec<_>>();
 
-    let mut new_contributions = Contributions::default();
-    for (idx, c) in contributions.into_iter().enumerate() {
-        new_contributions.sub_contributions[idx] = c;
-    }
-
-    Ok(new_contributions)
+    Ok(post_contributions)
 }
-
-// fn verify() {
-//     // todo: pairing check
-// }
 
 #[cfg(test)]
 pub mod test {

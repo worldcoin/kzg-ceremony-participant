@@ -20,11 +20,20 @@ ruint = { version = "1.3.0", features = ["serde", "ark-ff"] }
 tracing = "0.1"
 hex = "0.4.3"
 rayon = "1.5.3"
+thiserror = "^1.0.34"
 getrandom = { version = "0.2.7", features = ["js"] }
 console_error_panic_hook = "0.1.7"
+kzg-ceremony-crypto = {git="https://github.com/philsippl/kzg-ceremony-coordinator", rev="491fe44"}
 
 [target."wasm32-unknown-unknown".dependencies]
 js-sys = { version = "0.3.58"}
 wasm-bindgen = { version = "0.2.74"}
 wasm-bindgen-rayon = { version = "1.0", features = ["no-bundler"]}
 
+[profile.release-optimized]
+inherits = "release"
+codegen-units = 1
+lto = true
+panic = "abort"
+overflow-checks = true
+strip = true
