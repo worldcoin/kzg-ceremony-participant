@@ -6,9 +6,9 @@ mod wasm;
 use std::time::Instant;
 use std::{fs::File, path::Path};
 
-use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine};
+use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine, FrParameters};
 use ark_ec::{AffineCurve, ProjectiveCurve};
-use ark_ff::Field;
+use ark_ff::{Field, Fp256};
 use ark_serialize::Read;
 use ark_serialize::Write;
 use ark_std::UniformRand;
@@ -21,6 +21,7 @@ use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
+use ruint::aliases::U256;
 
 use crate::contribution::*;
 
@@ -65,78 +66,65 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
     let mut rng = ChaCha8Rng::seed_from_u64(1337);
 
     // private contribution
-    let t = ScalarField::rand(&mut rng);
-
-    // calculate powers of tau
-    let ptau = (0..MAX_POWERS_OF_TAU)
-        .into_par_iter()
-        .map(|i| t.pow([i as u64]))
+    let taus = prev_contributions
+        .sub_contributions
+        .iter()
+        .map(|_| ScalarField::rand(&mut rng))
         .collect::<Vec<_>>();
 
-    // we assume the last contribution entry contains all elements of the setup
-    let contributions = prev_contributions.sub_contributions.to_vec();
-    let full_contribution = contributions.last().unwrap();
-
-    // calculate all the g1 powers
-    // let start = Instant::now();
-    let all_g1_tau: Vec<G1BlstProjective> = full_contribution
-        .powers_of_tau
-        .g1_powers
-        .par_iter()
-        .enumerate()
-        .map(|(i, &sg)| {
-            let p: G1BlstAffine = sg.into();
-            let p: G1BlstProjective = p.into();
-            p.mul(ptau[i].into())
-        })
-        .collect::<Vec<_>>()
-        .into();
-    // println!("add tau: {:?}", start.elapsed());
-
-    let all_g1_tau: G1BlstProjectiveBatch = all_g1_tau.into();
-
-    // let start = Instant::now();
-    let all_g1_tau: G1BlstAffineBatch = all_g1_tau.into();
-    // println!("projective to affine: {:?}", start.elapsed());
-
-    let all_g1_tau: Vec<G1BlstAffine> = all_g1_tau.into();
-
-    // let start = Instant::now();
-    let all_g1_tau: Vec<G1> = all_g1_tau
-        .into_par_iter()
-        .map(|sg| {
-            assert!(sg.is_in_subgroup());
-            sg.into()
-        })
-        .collect::<Vec<_>>();
-    // println!("subgroup check: {:?}", start.elapsed());
-
-    // calculate the g2 powers (always same size)
-    // let start = Instant::now();
-    let all_g2_tau: Vec<G2> = full_contribution
-        .powers_of_tau
-        .g2_powers
-        .par_iter()
-        .enumerate()
-        .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
-        .collect::<Vec<_>>();
-    // println!("g2 operations: {:?}", start.elapsed());
-
-    // fill our data structure with the result
     let contributions = prev_contributions
         .sub_contributions
-        .to_vec()
-        .into_par_iter()
-        .map(|sub_contribution| {
-            let num_g1_powers = sub_contribution.powers_of_tau.g1_powers.len();
-            let num_g2_powers = sub_contribution.powers_of_tau.g2_powers.len();
+        .par_iter()
+        .enumerate()
+        .map(|(cid, prev_contribution)| {
+            // calculate powers of tau table
+            let ptau: Vec<Fp256<FrParameters>> = (0..prev_contribution.num_g1_powers)
+                .into_par_iter()
+                .map(|i| taus[cid].pow([i as u64]))
+                .collect::<Vec<_>>();
+
+            // calculate all the g1 powers
+            let g1_tau: Vec<G1BlstProjective> = prev_contribution
+                .powers_of_tau
+                .g1_powers
+                .par_iter()
+                .enumerate()
+                .map(|(i, &sg)| {
+                    let p: G1BlstAffine = sg.into();
+                    let p: G1BlstProjective = p.into();
+                    p.mul(ptau[i].into())
+                })
+                .collect::<Vec<_>>();
+
+            // batch projective to affine conversion
+            let g1_tau: G1BlstProjectiveBatch = g1_tau.into();
+            let g1_tau: G1BlstAffineBatch = g1_tau.into();
+            let g1_tau: Vec<G1BlstAffine> = g1_tau.into();
+
+            // subgroup check
+            let g1_tau: Vec<G1> = g1_tau
+                .into_par_iter()
+                .map(|sg| {
+                    assert!(sg.is_in_subgroup());
+                    sg.into()
+                })
+                .collect::<Vec<_>>();
+
+            // calculate the g2 powers
+            let g2_tau: Vec<G2> = prev_contribution
+                .powers_of_tau
+                .g2_powers
+                .par_iter()
+                .enumerate()
+                .map(|(i, &sg)| G2Affine::from(sg).mul(ptau[i]).into_affine().into())
+                .collect::<Vec<_>>();
 
             Contribution::new(
-                num_g1_powers,
-                num_g2_powers,
-                all_g1_tau[..num_g1_powers].to_vec(),
-                all_g2_tau[..num_g2_powers].to_vec(),
-                None,
+                prev_contribution.num_g1_powers,
+                prev_contribution.num_g2_powers,
+                g1_tau,
+                g2_tau,
+                None, // TODO
             )
         })
         .collect::<Vec<_>>();
