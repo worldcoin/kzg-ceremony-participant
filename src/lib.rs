@@ -19,8 +19,6 @@ use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
 use rayon::prelude::IntoParallelRefMutIterator;
 
-const MAX_POWERS_OF_TAU: usize = 1 << 15;
-
 fn load_json_file(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
     let mut contents = String::new();
@@ -57,35 +55,21 @@ pub fn contribute_with_string(json: String) -> Result<String> {
 fn contribute(
     contributions: Vec<kzg_ceremony_crypto::Contribution>,
 ) -> Result<kzg_ceremony_crypto::ContributionsJson> {
-    let mut post_contributions = ContributionsJson::initial();
-
-    // generate randomness
     // TODO: add externally generated seed based on user input
     let mut rng = thread_rng();
+    let taus = contributions
+        .iter()
+        .map(|_| ScalarField::rand(&mut rng))
+        .collect::<Vec<_>>();
 
-    // private contribution
-    let tau = ScalarField::rand(&mut rng);
-
-    // we'll only use the last contribution, since all others are just subsets
-    let mut full_contribution = contributions.last().unwrap().clone();
-
-    //subgroup check
-    full_contribution.subgroup_check();
-
-    // actual contribution
-    full_contribution.add_tau(&tau);
-
-    // encode the contribution
-    let contribution: ContributionJson = full_contribution.into();
-
-    // construct the response
-    post_contributions
-        .sub_contributions
-        .par_iter_mut()
-        .map(|el| {
-            el.powers_of_tau.g1_powers = contribution.powers_of_tau.g1_powers[..el.num_g1_powers].to_vec();
-            el.powers_of_tau.g2_powers = contribution.powers_of_tau.g1_powers[..el.num_g2_powers].to_vec();
-            // TODO: set potkey
+    let mut post_contributions = ContributionsJson::initial();
+    post_contributions.sub_contributions = contributions
+        .into_par_iter()
+        .enumerate()
+        .map(|(i, mut c)| {
+            c.subgroup_check();
+            c.add_tau(&taus[i]);
+            c.into()
         })
         .collect::<Vec<_>>();
 
