@@ -92,9 +92,9 @@ impl From<G1BlstProjectiveBatch> for G1BlstAffineBatch {
         unsafe {
             blst_p1s_to_affine( out.as_mut_ptr(), input.as_ptr(), size);
             out.set_len(size);
-
-            G1BlstAffineBatch(out.into_par_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
         }
+
+        G1BlstAffineBatch(out.into_par_iter().map(|x| x.into()).collect::<Vec<G1BlstAffine>>())
     }
 }
 
@@ -168,6 +168,10 @@ impl From<G1> for G1BlstAffine {
         let mut p = std::mem::MaybeUninit::<blst_p1_affine>::zeroed();
         unsafe {
             blst_p1_uncompress(p.as_mut_ptr(), buffer.as_ptr());
+
+            // if (*p.as_ptr()).x.l == [0; 6] {
+            //     // ERROR PARSING
+            // }
         }
 
         p.into()
