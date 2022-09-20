@@ -6,7 +6,7 @@ mod wasm;
 use std::time::Instant;
 use std::{fs::File, path::Path};
 
-use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine, FrParameters};
+use ark_bls12_381::{Fr as ScalarField, FrParameters, G1Affine, G2Affine};
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{Field, Fp256};
 use ark_serialize::Read;
@@ -91,6 +91,7 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
                 .enumerate()
                 .map(|(i, &sg)| {
                     let p: G1BlstAffine = sg.into();
+                    assert!(p.is_in_subgroup());
                     let p: G1BlstProjective = p.into();
                     p.mul(ptau[i].into())
                 })
@@ -101,13 +102,9 @@ fn contribute(prev_contributions: Contributions) -> Result<Contributions> {
             let g1_tau: G1BlstAffineBatch = g1_tau.into();
             let g1_tau: Vec<G1BlstAffine> = g1_tau.into();
 
-            // subgroup check
             let g1_tau: Vec<G1> = g1_tau
                 .into_par_iter()
-                .map(|sg| {
-                    assert!(sg.is_in_subgroup());
-                    sg.into()
-                })
+                .map(|sg| sg.into())
                 .collect::<Vec<_>>();
 
             // calculate the g2 powers
