@@ -1,23 +1,23 @@
 #[cfg(target_family = "wasm")]
 mod wasm;
 
+use eyre::Result;
+use kzg_ceremony_crypto::CeremonyError;
+use kzg_ceremony_crypto::Contribution;
+use kzg_ceremony_crypto::BLST;
+use rand::Rng;
+use rayon::prelude::*;
+use serde::Deserialize;
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+use std::io::Read;
+use std::io::Write;
 use std::{fs::File, path::Path};
 
-use ark_bls12_381::{Fr as ScalarField, G1Affine, G2Affine};
-use ark_ec::{AffineCurve, ProjectiveCurve};
-use ark_ff::Field;
-use ark_serialize::Read;
-use ark_serialize::Write;
-use ark_std::UniformRand;
-use eyre::Result;
-use kzg_ceremony_crypto::ContributionJson;
-use kzg_ceremony_crypto::ContributionsJson;
-use rand::thread_rng;
-use rayon::iter::IndexedParallelIterator;
-use rayon::iter::ParallelIterator;
-use rayon::prelude::IntoParallelIterator;
-use rayon::prelude::IntoParallelRefIterator;
-use rayon::prelude::IntoParallelRefMutIterator;
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct ContributionJson {
+    pub contributions: Vec<Contribution>,
+}
 
 fn load_json_file(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
@@ -32,95 +32,43 @@ fn write_json_file(path: &Path, contents: &str) -> Result<()> {
     Ok(())
 }
 
-/**
- * We'll use this function for the cli
- */
-pub fn contribute_with_file(in_path: &Path, out_path: &Path) -> Result<()> {
+pub fn contribute_with_json_file(entropy: [u8; 32], in_path: &Path, out_path: &Path) -> Result<()> {
     let json = load_json_file(in_path)?;
-    let result = contribute_with_string(json)?;
+    let result = contribute_with_json_string(entropy, json)?;
     write_json_file(out_path, &result)
 }
 
-/**
- * We'll use this function in the wasm
- */
-pub fn contribute_with_string(json: String) -> Result<String> {
-    let post = contribute(ContributionsJson::from_json(&json)?.parse()?)?;
-    Ok(serde_json::to_string(&post)?)
+pub fn contribute_with_json_string(entropy: [u8; 32], json: String) -> Result<String> {
+    let contributions = serde_json::from_str::<ContributionJson>(&json)?;
+    let contributions = contribute(entropy, contributions.contributions)?;
+    Ok(serde_json::to_string(&contributions)?)
 }
 
-/**
- * Apply a user's contibution to the setup
- */
-fn contribute(
-    contributions: Vec<kzg_ceremony_crypto::Contribution>,
-) -> Result<kzg_ceremony_crypto::ContributionsJson> {
-    // TODO: add externally generated seed based on user input
-    let mut rng = thread_rng();
-    let taus = contributions
-        .iter()
-        .map(|_| ScalarField::rand(&mut rng))
-        .collect::<Vec<_>>();
-
-    let mut post_contributions = ContributionsJson::initial();
-    post_contributions.sub_contributions = contributions
-        .into_par_iter()
-        .enumerate()
-        .map(|(i, mut c)| {
-            c.subgroup_check();
-            c.add_tau(&taus[i]);
-            c.into()
+pub fn contribute(
+    entropy: [u8; 32],
+    mut contributions: Vec<kzg_ceremony_crypto::Contribution>,
+) -> Result<Vec<kzg_ceremony_crypto::Contribution>> {
+    contributions
+        .par_iter_mut()
+        .map(|contribution| {
+            contribution.add_entropy::<BLST>(entropy)?;
+            Ok(())
         })
-        .collect::<Vec<_>>();
-
-    Ok(post_contributions)
+        .collect::<Result<Vec<_>, CeremonyError>>()?;
+    Ok(contributions)
 }
 
-#[cfg(test)]
-pub mod test {
-    use ark_bls12_381::{G1Affine, G2Affine};
-    use ark_ec::AffineCurve;
-    use ruint::{aliases::U384, uint};
+pub fn get_entropy(seed: &[u8]) -> [u8; 32] {
+    let mut rng = rand::thread_rng();
+    let entropy: [u8; 32] = rng.gen();
+    let mut buf = [0u8; 32];
 
-    use crate::contribution::{G1, G2, U768};
+    buf.copy_from_slice(
+        &Sha256::new()
+            .chain_update(seed)
+            .chain_update(entropy)
+            .finalize(),
+    );
 
-    #[test]
-    fn test_serialize_g1() {
-        let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
-        let p: G1 = g1.into();
-        let p: U384 = p.into();
-        let p = format!("{:#02x}", p);
-
-        assert_eq!(p, "0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb");
-    }
-
-    #[test]
-    fn test_deserialize_g1() {
-        let g1 = ark_bls12_381::G1Affine::prime_subgroup_generator();
-        let p = uint!(0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb_U384);
-        let p: G1 = p.into();
-        let p: G1Affine = g1.into();
-
-        assert_eq!(p, g1);
-    }
-
-    #[test]
-    fn test_serialize_g2() {
-        let g2 = ark_bls12_381::G2Affine::prime_subgroup_generator();
-        let p: G2 = g2.into();
-        let p: U768 = p.into();
-        let p = format!("{:#02x}", p);
-
-        assert_eq!(p, "0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8");
-    }
-
-    #[test]
-    fn test_deserialize_g2() {
-        let g2 = ark_bls12_381::G2Affine::prime_subgroup_generator();
-        let p = uint!(0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8_U768);
-        let p: G2 = p.into();
-        let p: G2Affine = g2.into();
-
-        assert_eq!(p, g2);
-    }
+    buf
 }
