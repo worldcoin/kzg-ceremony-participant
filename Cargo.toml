@@ -7,11 +7,6 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-ark-std = { version = "0.3", features = ["parallel"] }
-ark-ff = { version = "0.3" }
-ark-ec = { version = "0.3" }
-ark-serialize = { version = "0.3" }
-ark-bls12-381 = { version = "0.3", features = ["curve"] }
 rand = "0.8.4"
 eyre = "0.6.8"
 serde = { version = "1.0.104", features = ["derive"] }
@@ -23,7 +18,8 @@ rayon = "1.5.3"
 thiserror = "^1.0.34"
 getrandom = { version = "0.2.7", features = ["js"] }
 console_error_panic_hook = "0.1.7"
-kzg-ceremony-crypto = {git="https://github.com/philsippl/kzg-ceremony-coordinator", rev="491fe44"}
+kzg-ceremony-crypto = { git = "https://github.com/ethereum/kzg-ceremony-sequencer.git", features = ["blst"], rev = "f2763ae" }
+sha2 = { version = "0.10", default-features = false }
 
 [target."wasm32-unknown-unknown".dependencies]
 js-sys = { version = "0.3.58"}

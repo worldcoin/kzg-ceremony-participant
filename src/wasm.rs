@@ -3,7 +3,7 @@ use std::panic;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_rayon::init_thread_pool;
 
-use crate::contribute_with_string;
+use crate::contribute_with_json_string;
 
 #[wasm_bindgen]
 pub fn init_threads(n: usize) -> Promise {
@@ -12,7 +12,15 @@ pub fn init_threads(n: usize) -> Promise {
 }
 
 #[wasm_bindgen]
-pub fn contribute_wasm(input: &str) -> String {
-    let response = contribute_with_string(input.to_string()).unwrap();
+pub fn contribute(entropy: &str, input: &str) -> String {
+    let mut buf = [0u8; 32];
+    buf.copy_from_slice(&hex::decode(entropy).unwrap());
+    let response = contribute_with_json_string(buf, input.to_string()).unwrap();
     return format!("{}", response);
+}
+
+#[wasm_bindgen]
+pub fn get_entropy(input: &str) -> String {
+    let response = crate::get_entropy(input.as_bytes());
+    return format!("{}", hex::encode(response));
 }
