@@ -11,13 +11,22 @@ Implemensts a participant client for the KZG powers of tau ceremony according th
 - [BLS12-381 For The Rest Of Us](https://hackmd.io/@benjaminion/bls12-381)
 - [How trusted setups work](https://vitalik.ca/general/2022/03/14/trustedsetup.html)
 
+## Dependencies
+
+Install these dependencies before you start going through the build instructions:
+
+- [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.htm)
+- [Python](https://www.python.org/downloads/)
+- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) (alt: [brew](https://formulae.brew.sh/formula/wasm-pack))
+- [emscripten (emcc)](https://emscripten.org/docs/getting_started/downloads.html) (alt: [brew](https://formulae.brew.sh/formula/emscripten#default))
+
 ## Build instructions
 ### Native
 - Run tests: `cargo test --target aarch64-apple-darwin`
 - Build: `cargo run --release --target aarch64-apple-darwin`
 
 ### Wasm
-- Build: `wasm-pack build --target web -d wasm/pkg`
+- Build: `CC=emcc AR=emar wasm-pack build --target web -d wasm/pkg`
 - Run server: `python3 ./wasm/server.py`
 
 ## Benchmarks
