@@ -352,7 +352,7 @@ dependencies = [
 [[package]]
 name = "kzg-ceremony-crypto"
 version = "0.1.0"
-source = "git+https://github.com/ethereum/kzg-ceremony-sequencer.git?rev=f2763ae#f2763ae038c3ebb92b3a11bbfb071dd3f5d55c8d"
+source = "git+https://github.com/ethereum/kzg-ceremony-sequencer.git#7f175c35f9b39f040b2c89604678f492f6e36c28"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -361,7 +361,9 @@ dependencies = [
  "hex",
  "hex-literal",
  "rand",
+ "rand_chacha",
  "rayon",
+ "secrecy",
  "serde",
  "serde_json",
  "thiserror",
@@ -587,6 +589,15 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "secrecy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
+dependencies = [
+ "zeroize",
+]
 
 [[package]]
 name = "semver"
