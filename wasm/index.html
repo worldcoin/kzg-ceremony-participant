@@ -5,13 +5,11 @@
     <title>hello-wasm example</title>
   </head>
   <body>
-
     <script src="module-workers-polyfill.min.js"></script>
     <script type="module">
       const worker = new Worker('wasm-worker.js', {
         type: 'module'
       });
-        
     </script>
   </body>
 </html>

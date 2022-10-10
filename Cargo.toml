@@ -18,7 +18,7 @@ rayon = "1.5.3"
 thiserror = "^1.0.34"
 getrandom = { version = "0.2.7", features = ["js"] }
 console_error_panic_hook = "0.1.7"
-kzg-ceremony-crypto = { git = "https://github.com/ethereum/kzg-ceremony-sequencer.git", features = ["blst"], rev = "f2763ae" }
+kzg-ceremony-crypto = { git = "https://github.com/ethereum/kzg-ceremony-sequencer.git", features = ["blst"]}
 sha2 = { version = "0.10", default-features = false }
 
 [target."wasm32-unknown-unknown".dependencies]
